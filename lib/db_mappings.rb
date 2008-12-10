@@ -1,7 +1,7 @@
 ActiveRecord::Base.class_eval do
   @mapping_filename = File.join(RAILS_ROOT, Rails.env.test? ? 'test' : 'config', 'mappings.yml')
   if File.exists?(  @mapping_filename )
-    @@map_hash = File.open( @mapping_filename ) { |file| YAML::load(file) }
+    @@map_hash ||= YAML::load(ERB.new(File.read(@mapping_filename)).result)
     if @@map_hash 
       def self.load_mappings
         # Set the table name for the class, if defined
