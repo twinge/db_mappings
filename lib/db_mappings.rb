@@ -20,6 +20,10 @@ ActiveRecord::Base.class_eval do
           end
         end
       end
+    else
+      def self.load_mappings
+        
+      end
     end
 
     # =============================================================================
