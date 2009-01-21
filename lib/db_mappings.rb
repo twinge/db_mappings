@@ -14,40 +14,9 @@ ActiveRecord::Base.class_eval do
       if @@map_hash 
         # Set the table name for the class, if defined
         set_table_name @@map_hash['tables'][self.name.underscore] if @@map_hash['tables'] && @@map_hash['tables'][self.name.underscore]   
-        # Establish connection based on the databases entry
-        if @@map_hash['databases']
-          found = false
-          for db, tables in @@map_hash['databases']
-            if tables.include?(self.name.underscore)
-              self.class_eval "establish_connection '#{db}'"
-              # Prepend database for joins
-              unless table_name['.']
-                db_name = ActiveRecord::Base.configurations[db]["database"]
-                self.set_table_name "#{db_name}.#{table_name}"
-              end
-              found = true
-              break
-            end
-          end
-          # Set database for models using default RAILS_ENV connection as well (ie not in database: list)
-          unless found || table_name['.']
-            @@default_db ||= ActiveRecord::Base.configurations[RAILS_ENV]["database"]
-            self.set_table_name "#{@@default_db}.#{table_name}"
-          end
-        end
-        # Map non-standard column names to the names used in the code
-        if @@map_hash[self.name.underscore]
-          @@map_hash[self.name.underscore].each do |standard, custom| 
-            unless standard.to_s == 'id'
-              self.class_eval "def #{standard}() #{custom}; end"
-              self.class_eval "def #{standard}=(val) self[:#{custom}] = val; end"
-            end
-          end
-          # Set the primary key to something besides 'id'
-          if @@map_hash[self.name.underscore]['id']
-            self.class_eval "set_primary_key :#{@@map_hash[self.name.underscore]['id']}"
-          end
-        end
+
+        handle_databases
+        map_column_names
       end
     end
 
@@ -89,4 +58,47 @@ ActiveRecord::Base.class_eval do
       ActiveRecord::Base._(column, table)
     end
   end
+
+  protected
+
+    def self.handle_databases
+      # Establish connection based on the databases entry
+      if @@map_hash['databases']
+        found = false
+        for db, tables in @@map_hash['databases']
+          if tables.include?(self.name.underscore)
+            self.class_eval "establish_connection '#{db}'"
+            # Prepend database for joins
+            unless table_name['.']
+              db_name = ActiveRecord::Base.configurations[db]["database"]
+              self.set_table_name "#{db_name}.#{table_name}"
+            end
+            found = true
+            break
+          end
+        end
+        # Set database for models using default RAILS_ENV connection as well (ie not in database: list)
+        unless found || table_name['.']
+          @@default_db ||= ActiveRecord::Base.configurations[RAILS_ENV]["database"]
+          self.set_table_name "#{@@default_db}.#{table_name}"
+        end
+      end
+    end
+
+    def self.map_column_names
+      # Map non-standard column names to the names used in the code
+      if @@map_hash[self.name.underscore]
+        @@map_hash[self.name.underscore].each do |standard, custom|
+          unless standard.to_s == 'id'
+            self.class_eval "def #{standard}() #{custom}; end"
+            self.class_eval "def #{standard}=(val) self[:#{custom}] = val; end"
+          end
+        end
+        # Set the primary key to something besides 'id'
+        if @@map_hash[self.name.underscore]['id']
+          self.class_eval "set_primary_key :#{@@map_hash[self.name.underscore]['id']}"
+        end
+      end
+    end
+
 end
