@@ -6,7 +6,7 @@ ActiveRecord::Base.class_eval do
     # Convert the databases list of comma-separated values in an array
     if @@map_hash && @@map_hash['databases']
       for db, tables_list in @@map_hash['databases']
-        @@map_hash['databases'][db] = tables_list.gsub(' ','').split(',')
+        @@map_hash['databases'][db] = tables_list.gsub(/\s/,'').split(',')
       end
     end
 
