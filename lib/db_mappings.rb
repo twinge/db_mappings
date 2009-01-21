@@ -2,10 +2,39 @@ ActiveRecord::Base.class_eval do
   @mapping_filename = File.join(RAILS_ROOT, Rails.env.test? ? 'test' : 'config', 'mappings.yml')
   if File.exists?(  @mapping_filename )
     @@map_hash ||= YAML::load(ERB.new(File.read(@mapping_filename)).result)
+
+    # Convert the databases list of comma-separated values in an array
+    if @@map_hash && @@map_hash['databases']
+      for db, tables_list in @@map_hash['databases']
+        @@map_hash['databases'][db] = tables_list.gsub(' ','').split(',')
+      end
+    end
+
     def self.load_mappings
       if @@map_hash 
         # Set the table name for the class, if defined
         set_table_name @@map_hash['tables'][self.name.underscore] if @@map_hash['tables'] && @@map_hash['tables'][self.name.underscore]   
+        # Establish connection based on the databases entry
+        if @@map_hash['databases']
+          found = false
+          for db, tables in @@map_hash['databases']
+            if tables.include?(self.name.underscore)
+              self.class_eval "establish_connection '#{db}'"
+              # Prepend database for joins
+              unless table_name['.']
+                db_name = ActiveRecord::Base.configurations[db]["database"]
+                self.set_table_name "#{db_name}.#{table_name}"
+              end
+              found = true
+              break
+            end
+          end
+          # Set database for models using default RAILS_ENV connection as well (ie not in database: list)
+          unless found || table_name['.']
+            @@default_db ||= ActiveRecord::Base.configurations[RAILS_ENV]["database"]
+            self.set_table_name "#{@@default_db}.#{table_name}"
+          end
+        end
         # Map non-standard column names to the names used in the code
         if @@map_hash[self.name.underscore]
           @@map_hash[self.name.underscore].each do |standard, custom| 
@@ -19,6 +48,18 @@ ActiveRecord::Base.class_eval do
             self.class_eval "set_primary_key :#{@@map_hash[self.name.underscore]['id']}"
           end
         end
+      end
+    end
+
+    # For mappings done programmatically with the lib_path classes, this method is useful
+    # in getting things started.  You can easily make stubs by passing a map in the
+    # format :attribute => 'code to eval to return value'.  Once the app is running with these
+    # stubs you can go one by one and implement true get/set methods.
+    def self.doesnt_implement_attributes(atts)
+      for at, val in atts
+        val = "''" if val.class == String && val.empty?
+        self.class_eval "def #{at}() #{val}; end"
+        self.class_eval "def #{at}=(val) throw '#{at}=(val) is not implemented' end"
       end
     end
 
